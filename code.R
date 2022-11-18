@@ -1,6 +1,4 @@
-##########################################################
-# Create edx set, validation set (final hold-out test set)
-##########################################################
+##### Create edx set, validation set (final hold-out test set) #####
 
 # Note: this process could take a couple of minutes
 
@@ -49,3 +47,27 @@ removed <- anti_join(temp, validation)
 edx <- rbind(edx, removed)
 
 rm(dl, ratings, movies, test_index, temp, movielens, removed)
+
+##### Background and exploratory data analysis #####
+# Take a look at sparsity using a random sample of our matrix of users, movies
+install.packages("rafalib")
+users <- sample(unique(edx$userId), 100)
+rafalib::mypar()
+edx %>% filter(userId %in% users) %>% 
+  select(userId, movieId, rating) %>%
+  mutate(rating = 1) %>%
+  spread(movieId, rating) %>% select(sample(ncol(.), 100)) %>% 
+  as.matrix() %>% t(.) %>%
+  image(1:100, 1:100,. , xlab="Movies", ylab="Users")
+abline(h=0:100+0.5, v=0:100+0.5, col = "grey")
+
+edx %>%
+dplyr::count(movieId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "black") + 
+  scale_x_log10() + 
+  ggtitle("Movies")
+
+
+##### Generate predicted movie ratings and calculate RMSE #####
+
