@@ -61,6 +61,7 @@ edx %>% filter(userId %in% users) %>%
   image(1:100, 1:100,. , xlab="Movies", ylab="Users")
 abline(h=0:100+0.5, v=0:100+0.5, col = "grey")
 
+# Visualize the distribution of ratings per movie
 edx %>%
 dplyr::count(movieId) %>% 
   ggplot(aes(n)) + 
@@ -68,6 +69,13 @@ dplyr::count(movieId) %>%
   scale_x_log10() + 
   ggtitle("Movies")
 
+# Visualize that different users rate different numbers of movies
+edx %>%
+  dplyr::count(userId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(bins = 30, color = "black") + 
+  scale_x_log10() +
+  ggtitle("Users")
 
 ##### Generate predicted movie ratings and calculate RMSE #####
 

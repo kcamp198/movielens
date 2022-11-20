@@ -1,7 +1,7 @@
 ---
 title: "Report on Movie Ratings"
 author: "Kevin Camp"
-date: "2022-11-16"
+date: '`r Sys.Date()`'
 output: pdf_document
 ---
 
@@ -9,17 +9,59 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+# 1.0 Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This report satisfies the guidelines for the MovieLens project in the Data Science Capstone course. The  project goal is analyzing a dataset of movie ratings by a collection of users in order to create a recommendation system. The recommendation system will predict ratings by user for movies which that user has not yet rated. The dataset is large; that presents a challenge, in that large datasets are difficult to manage. It also presents an opportunity, in that every data point can be used as a predictor for each missing value in the overall set. The aim of the project is to achieve that using machine learning methods.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+# 1.1 Overview
 
-```{r cars}
-summary(cars)
+The MovieLens dataset contains
+
+# 1.2 Executive summary
+
+```{r sparsity, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
+##### Create edx set, validation set (final hold-out test set) #####
+
+# Note: this process could take a couple of minutes
+
+options(repos = list(CRAN="http://cran.rstudio.com/"))
+
+knitr::opts_chunk$set(message = FALSE)
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+
+library(tidyverse)
+library(caret)
+library(data.table)
+
+# MovieLens 10M dataset:
+# https://grouplens.org/datasets/movielens/10m/
+# http://files.grouplens.org/datasets/movielens/ml-10m.zip
+
+download.file("https://www.dropbox.com/s/nspymeso8rmmak1/edx.rds?dl=1", "edx.rds", mode="wb")
+
+download.file("https://www.dropbox.com/s/x0s477b0kzxpl6i/validation.rds?dl=1", "validation.rds", mode="wb")
+
+edx = readRDS("edx.rds")
+
+validation = readRDS("validation.rds")
+
+# Take a look at sparsity using a random sample of our matrix of users, movies
+install.packages("rafalib")
+users <- sample(unique(edx$userId), 100)
+rafalib::mypar()
+edx %>% filter(userId %in% users) %>% 
+  select(userId, movieId, rating) %>%
+  mutate(rating = 1) %>%
+  spread(movieId, rating) %>% select(sample(ncol(.), 100)) %>% 
+  as.matrix() %>% t(.) %>%
+  image(1:100, 1:100,. , xlab="Movies", ylab="Users")
+abline(h=0:100+0.5, v=0:100+0.5, col = "grey")
 ```
 
-## Including Plots
+# Including Plots
 
 You can also embed plots, for example:
 
