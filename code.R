@@ -2,51 +2,31 @@
 
 # Note: this process could take a couple of minutes
 
+options(repos = list(CRAN="http://cran.rstudio.com/"))
+
+knitr::opts_chunk$set(message = FALSE)
+
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(kableExtra)) install.packages("kableExtra", repos = "http://cran.us.r-project.org")
 
 library(tidyverse)
 library(caret)
 library(data.table)
+library(kableExtra)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
 # http://files.grouplens.org/datasets/movielens/ml-10m.zip
 
-dl <- tempfile()
-download.file("https://files.grouplens.org/datasets/movielens/ml-10m.zip", dl)
+download.file("https://www.dropbox.com/s/nspymeso8rmmak1/edx.rds?dl=1", "edx.rds", mode="wb")
 
-ratings <- fread(text = gsub("::", "\t", readLines(unzip(dl, "ml-10M100K/ratings.dat"))),
-                 col.names = c("userId", "movieId", "rating", "timestamp"))
+download.file("https://www.dropbox.com/s/x0s477b0kzxpl6i/validation.rds?dl=1", "validation.rds", mode="wb")
 
-movies <- str_split_fixed(readLines(unzip(dl, "ml-10M100K/movies.dat")), "\\::", 3)
-colnames(movies) <- c("movieId", "title", "genres")
+edx = readRDS("edx.rds")
 
-# if using R 4.0 or later:
-movies <- as.data.frame(movies) %>% mutate(movieId = as.numeric(movieId),
-                                           title = as.character(title),
-                                           genres = as.character(genres))
-
-
-movielens <- left_join(ratings, movies, by = "movieId")
-
-# Validation set will be 10% of MovieLens data
-set.seed(1, sample.kind="Rounding") # if using R 3.5 or earlier, use `set.seed(1)`
-test_index <- createDataPartition(y = movielens$rating, times = 1, p = 0.1, list = FALSE)
-edx <- movielens[-test_index,]
-temp <- movielens[test_index,]
-
-# Make sure userId and movieId in validation set are also in edx set
-validation <- temp %>% 
-  semi_join(edx, by = "movieId") %>%
-  semi_join(edx, by = "userId")
-
-# Add rows removed from validation set back into edx set
-removed <- anti_join(temp, validation)
-edx <- rbind(edx, removed)
-
-rm(dl, ratings, movies, test_index, temp, movielens, removed)
+validation = readRDS("validation.rds")
 
 ##### Background and exploratory data analysis #####
 # Take a look at sparsity using a random sample of our matrix of users, movies
@@ -101,3 +81,24 @@ edx %>% slice(1:10) %>% knitr::kable() %>%
 
 edx_summary[,1:6] %>% 
   knitr::kable()
+
+min(nchar(edx$genres))
+which.min(nchar(edx$genres))
+edx$genres[7799]
+
+sum(str_count(edx$genres, "(no genres listed)"))
+n_distinct(edx$genres)
+unique(edx$genres)
+match("(no genres listed)", edx$genres)
+edx$genres[922544]
+edx$title[922544]
+edx[922544]
+edx %>% filter(genres == "(no genres listed)")
+
+#edx <- edx %>%
+ # mutate(date = as.Date(as.POSIXct(timestamp,origin="1970-01-01 00:00:00",tz = "GMT"))
+  #       ,year = as.numeric(substr(date,1,4))) %>%
+  #select(-timestamp)
+
+
+head(edx)

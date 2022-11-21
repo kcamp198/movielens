@@ -59,7 +59,7 @@ edx %>% slice(1:10) %>% knitr::kable(caption = "Table 1.1. First ten rows of edx
                 latex_options = c("scale_down","HOLD_position"))
 ```
 
-Additional summary detail on the edx set is included in table 1.2.  
+Additional summary detail on the edx set is included in table 1.2. The table shows the large number of users, movies, and movie genres represented in the data.  
 
 ```{r edx summary table, message=FALSE, warning=FALSE, echo=FALSE}
 
@@ -104,7 +104,7 @@ edx %>% filter(userId %in% users) %>%
 abline(h=0:100+0.5, v=0:100+0.5, col = "grey")
 ```
 
-Another useful bit of information is the timing of when users submitted ratings. The rating submission dates in the edx set range from 1995 to 2009, as illustrated in table 1.3.  
+The edx data contains other useful pieces of information. For example, the timestamp column measures the timing of when users submitted ratings. The rating submission dates in the edx set range from 1995 to 2009, as illustrated in table 1.3.  
 
 ```{r edx date range, message=FALSE, warning=FALSE, echo=FALSE}
 
@@ -114,20 +114,44 @@ edx_summary[,7:8] %>%
                 latex_options = c("HOLD_position"))
 ```
 
+Another example is the genre information for each movie. Exploratory data analysis reveals at least one genre listed for the vast majority of movies recorded in the edx data. In fact, only one movie in the dataset---rated by 7 users---lacks a genre description as demonstrated in table 1.4. Referring back to table 1.1, we see that many movies have multiple genres listed. These variables, along with the others previously mentioned, will be useful predictors in the model.   
 
+```{r edx no genre listed, message=FALSE, warning=FALSE, echo=FALSE}
 
-
+edx %>%
+  filter(genres == "(no genres listed)") %>% 
+  knitr::kable(caption = "Table 1.4. Rows in edx lacking genre information",
+                                     row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+```
 
 # 1.2 Executive summary  
 
+# 2.0 Methods and analysis
 
-# Including Plots
+# 2.1 Techniques and processes
 
-You can also embed plots, for example:
+## 2.1.1 Data cleaning
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
+The timestamp in edx and Tags data set represented seconds since midnight Coordinated Universal Time (UTC) of January 1, 1970. Itw as converted to date for further analysis.
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## 2.1.2 Data exploration and visualization
 
+## 2.1.3 Insights gained
+
+# 2.2 Modeling approach
+
+# 3.0 Results
+
+# 3.1 Model results
+
+# 3.2 Model performance
+
+# 4.0 Conclusion
+
+# 4.1 Report summary
+
+# 4.2 Limitations
+
+# 4.3 Future work
