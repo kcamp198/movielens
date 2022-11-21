@@ -100,5 +100,36 @@ edx %>% filter(genres == "(no genres listed)")
   #       ,year = as.numeric(substr(date,1,4))) %>%
   #select(-timestamp)
 
+edx <- edx %>% 
+  mutate(rating_time = as.Date(as.POSIXct(timestamp, origin = "1970-01-01 00:00:00",tz = "GMT"))) %>% 
+  mutate(rating_year = year(rating_time)) %>%
+  select(-timestamp)
+
+edx <- edx %>%
+  mutate(release_year = as.integer(substr(title, str_length(title) - 4,
+                                          str_length(title) - 1)))
 
 head(edx)
+
+min(edx$rating)
+
+#summary table of ratings
+install.packages("psych")
+library(psych)
+describe(edx$rating, fast = TRUE) %>% knitr::kable()
+
+#create a summary table grouping by rating
+rating_sum <- edx %>% group_by(rating) %>%
+  summarize(count = n())
+rating_sum
+
+rating_sum <- edx %>% group_by(rating) %>%
+  summarize(count = n())
+
+rating_sum %>% mutate(rating = factor(rating)) %>%
+  ggplot(aes(rating, count)) +
+  geom_col(fill = "steel blue", color = "white") +
+  theme_classic() + 
+  labs(x = "Rating", y = "Count",
+       title = "Number of rating",
+       caption = "Figure 1 - Rating in edx dataset")
