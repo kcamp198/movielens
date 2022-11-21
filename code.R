@@ -79,3 +79,25 @@ edx %>%
 
 ##### Generate predicted movie ratings and calculate RMSE #####
 
+edx_summary <- data.frame(Rows = nrow(edx),
+                          Columns = ncol(edx),
+                          Users = n_distinct(edx$userId),
+                          Movies = n_distinct(edx$movieId),
+                          Average_rating = round(mean(edx$rating),2),
+                          Number_of_genres = n_distinct(edx$genres),
+                          Date_of_first_rating = 
+                            as.Date(as.POSIXct(min(edx$timestamp), 
+                                               origin = "1970-01-01")),
+                          Date_of_last_rating = 
+                            as.Date(as.POSIXct(max(edx$timestamp),
+                                               origin = "1970-01-01")))
+
+install.packages("kableExtra")
+library(kableExtra)
+
+edx %>% slice(1:10) %>% knitr::kable() %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("scale_down","HOLD_position"))
+
+edx_summary[,1:6] %>% 
+  knitr::kable()

@@ -3,23 +3,25 @@ title: "Report on Movie Ratings"
 author: "Kevin Camp"
 date: '`r Sys.Date()`'
 output: pdf_document
+header-includes:
+    - \usepackage{caption}
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# 1.0 Introduction
+# 1.0 Introduction  
 
 This report satisfies the guidelines for the MovieLens project in the Data Science Capstone course. The  project goal is analyzing a dataset of movie ratings by a collection of users in order to create a recommendation system. The recommendation system will predict ratings by user for movies which that user has not yet rated. The dataset is large; that presents a challenge, in that large datasets are difficult to manage. It also presents an opportunity, in that every data point can be used as a predictor for each missing value in the overall set. The aim of the project is to achieve that using machine learning methods.
 
-# 1.1 Overview
+# 1.1 Overview  
 
-The MovieLens dataset contains
+The project uses a modified version of the MovieLens data with two sets. One set---"edx"---is used to train the model, and contains more than 9 million rows of user--movie ratings. Each row provides columns detailing a user identifier (userId); movie identifier (movieId); movie rating given by the user (rating); time in seconds since the Unix Epoch on midnight, January 1st, 1970 (timestamp); name of the rated movie (title); and genre or genres describing the rated movie (genres). The other set---"validation"---is similar in content to edx, and is used as the final hold-out test set. Table 1.1 presents a selection of rows from edx.  
 
-# 1.2 Executive summary
+\captionsetup[table]{labelformat=empty}
 
-```{r sparsity, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
+```{r create datasets and view edx top, message=FALSE, warning=FALSE, echo=FALSE}
 ##### Create edx set, validation set (final hold-out test set) #####
 
 # Note: this process could take a couple of minutes
@@ -31,10 +33,12 @@ knitr::opts_chunk$set(message = FALSE)
 if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
+if(!require(kableExtra)) install.packages("kableExtra", repos = "http://cran.us.r-project.org")
 
 library(tidyverse)
 library(caret)
 library(data.table)
+library(kableExtra)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
@@ -48,6 +52,45 @@ edx = readRDS("edx.rds")
 
 validation = readRDS("validation.rds")
 
+#view first ten rows
+edx %>% slice(1:10) %>% knitr::kable(caption = "Table 1.1. First ten rows of edx dataset",
+                                     row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("scale_down","HOLD_position"))
+```
+
+Additional summary detail on the edx set is included in table 1.2.  
+
+```{r edx summary table, message=FALSE, warning=FALSE, echo=FALSE}
+
+#create summary table
+edx_summary <- data.frame(Rows = nrow(edx),
+                          Columns = ncol(edx),
+                          "Unique users" = n_distinct(edx$userId),
+                          "Unique movies" = n_distinct(edx$movieId),
+                          "Average rating" = round(mean(edx$rating),2),
+                          "Number of genres" = n_distinct(edx$genres),
+                          "Date of first rating" = 
+                            as.Date(as.POSIXct(min(edx$timestamp), 
+                                               origin = "1970-01-01")),
+                          "Date of last rating" = 
+                            as.Date(as.POSIXct(max(edx$timestamp),
+                                               origin = "1970-01-01")),
+                          check.names = FALSE)
+
+edx_summary[,1:6] %>% 
+  knitr::kable(caption = "Table 1.2. Summary of edx set") %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+```
+
+Note the result from multiplying the unique users and unique movies values from table 1.2, 69,878 × 10,677 =  746,087,406, a number larger than the total row count for the edx set (9,000,055). This implies that in the edx data, each user did not rate each movie. It is then useful to view the edx dataset as a matrix, with users represented by rows and movies represented by columns. Chart 1.1 takes a random sample of 100 movies and 100 users and depicts user--movie combinations for which ratings exist with yellow shading. The machine learning algorithm developed in this project will allow us to use values in the entire matrix as predictors for each empty cell.  
+
+\begin{center}
+Chart 1.1. Matrix of a random sample of 100 users and 100 movies from edx
+\end{center}
+
+```{r matrix sparsity, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
 # Take a look at sparsity using a random sample of our matrix of users, movies
 install.packages("rafalib")
 users <- sample(unique(edx$userId), 100)
@@ -60,6 +103,23 @@ edx %>% filter(userId %in% users) %>%
   image(1:100, 1:100,. , xlab="Movies", ylab="Users")
 abline(h=0:100+0.5, v=0:100+0.5, col = "grey")
 ```
+
+Another useful bit of information is the timing of when users submitted ratings. The rating submission dates in the edx set range from 1995 to 2009, as illustrated in table 1.3.  
+
+```{r edx date range, message=FALSE, warning=FALSE, echo=FALSE}
+
+edx_summary[,7:8] %>% 
+  knitr::kable(caption = "Table 1.3. Date range in edx set") %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+```
+
+
+
+
+
+# 1.2 Executive summary  
+
 
 # Including Plots
 
