@@ -256,4 +256,106 @@ movie_sum
 edx <- left_join(edx, movie_sum, by = "movieId")
 head(edx)
 
+rmses <- data_frame(method = "Only estimate is the average",
+                    RMSE = RMSE(mean(edx$rating), edx$rating))
+
+rmses %>%
+  knitr::kable(caption = "Table 3.1. RMSE by method",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+
 RMSE(edx$mu_movie, edx$rating)
+
+
+b_u_sum <- edx %>% mutate(yhat = rating - mu_movie) %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(yhat))
+
+edx <- left_join(edx, b_u_sum, by = "userId") %>%
+  mutate(mu_movie_user = mu_movie + b_u)
+# Append the row to the RMSE table
+rmses <- bind_rows(rmses,
+                   data_frame(method = "Add user–specific effect",
+                              RMSE = RMSE(edx$mu_movie_user, edx$rating)))
+# Display the RMSE table
+rmses %>%
+  knitr::kable(caption = "Table 3.2. RMSE by method II",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+
+b_t_sum <- edx %>% mutate(error = rating - mu_movie_user) %>%
+  group_by(aging_time) %>%
+  summarize(b_t = mean(error))
+
+edx <- left_join(edx, b_t_sum, by = "aging_time") 
+
+# Convert NAs to 0
+edx$b_t[is.na(edx$b_t)] <- 0
+
+edx <- edx %>%
+  mutate(mu_movie_user_time = mu_movie_user + b_t)
+
+b_g_sum <- edx %>% mutate(error = rating - mu_movie_user_time) %>%
+  group_by(genres) %>%
+  summarize(b_g = mean(error))
+
+edx <- left_join(edx, b_g_sum, by = "genres") 
+
+edx <- edx %>%
+  mutate(mu_movie_user_time_genres = mu_movie_user_time + b_g)
+
+
+
+# Update validation with timestamp converted to date format
+validation <- validation %>% 
+  mutate(rating_time = as.Date(as.POSIXct(timestamp, origin = "1970-01-01 00:00:00",tz = "GMT"))) %>% 
+  mutate(rating_year = year(rating_time)) %>%
+  select(-timestamp)
+
+# Calculate the aging time
+validation <- validation %>% left_join(first_sum, by = "movieId")
+validation <- validation %>%
+  mutate(aging_time = as.numeric(round((rating_time - first_rating_time)/7,0)))
+
+# Append effects to validation
+validation <- validation %>% left_join(b_u_sum, by = "userId") %>%
+  left_join(b_t_sum, by = "aging_time") %>%
+  left_join(b_g_sum, by = "genres") %>%
+  left_join(movie_sum, by = "movieId")
+
+head(validation)
+
+# Check validation set for NA values
+knitr::kable(data.frame(n_NA = colSums(is.na(validation[,12:14]))),
+      caption = "NA value check in validation set", 
+      digits = 0) %>% 
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+
+# Combine effects for final predicted ratings
+validation <- validation %>%
+  mutate(predicted_rating = mu_movie + b_u + b_t + b_g)
+
+# Create and display the final RMSE table
+data_frame(method = "Movie, user, time, genre effect model",
+           RMSE = RMSE(validation$rating, validation$predicted_rating)) %>%
+  knitr::kable(caption = "Table 3.6. Final RMSE evaluation",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+
+validation$b_t.x[is.na(validation$b_t.x)] <- mean(validation$b_t.x, na.rm = T)
+
+validation <- validation %>%
+  mutate(predicted_rating = mu_movie + b_u.x + b_t.x + b_g.x)
+
+RMSE(validation$rating, validation$predicted_rating)
+
+
+movie_sum <- edx %>% group_by(movieId) %>%
+  summarize(mu_movie = mean(rating))

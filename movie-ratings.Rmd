@@ -136,6 +136,8 @@ edx %>%
 
 # 1.2 Executive summary  
 
+
+
 # 2.0 Methods and analysis
 
 For this project, my goal is to develop a movie recommendation model. This model will aim to accurately predict movie ratings in the final hold-out test set as if they were not known to me. The means of evaluating my success will be minimizing residual mean squared error (RMSE). This project has a defined target RMSE value of less than 0.8649. As such, my goal is to design a model using machine learning methods that achieves RMSE < 0.8649.  
@@ -188,13 +190,13 @@ The timestamp in edx represents seconds since midnight Coordinated Universal Tim
 
 ```{r view updated edx top, message=FALSE, warning=FALSE, echo=FALSE}
 
-#update edx with timestamp converted to date format
+# Update edx with timestamp converted to date format
 edx <- edx %>% 
   mutate(rating_time = as.Date(as.POSIXct(timestamp, origin = "1970-01-01 00:00:00",tz = "GMT"))) %>% 
   mutate(rating_year = year(rating_time)) %>%
   select(-timestamp)
 
-#view first five rows
+# View first five rows
 edx %>% slice(1:5) %>% knitr::kable(caption = "Table 2.2. First five rows of updated edx dataset",
                                      row.names = FALSE) %>%
   kable_styling(font_size = 10, position = "center",
@@ -631,27 +633,205 @@ genres_sum2 %>%
 
 The exercise of data exploration and visualization resulted in several useful insights. Ratings data are unbalanced---a large number of movies have very few ratings. As the number of times a movie has been rated rises, average ratings increase and rating variability declines. Despite users submitting a large number of overall 5.0 ratings, very few movies averaged a rating of 4.5 or higher.  
 
-Substantial user-to-user variation is present in the edx data. Certain users rate very few movies, while others submitted thousands of ratings. User rating averages varied widely among those with few ratings. This variability was not observed for users with many ratings. In addition, very high and very low user--rating averages were rare, especially in light of how many 5.0 ratings were submitted overall.
+Substantial user-to-user variation is present in the edx data. Certain users rate very few movies, while others submitted thousands of ratings. User rating averages varied widely among those with few ratings. This variability was not observed for users with many ratings. In addition, very high and very low user--rating averages were rare, especially in light of how many 5.0 ratings were submitted overall.  
 
-The ratings of movies are correlated with their release years. After a movie receives its first rating, other ratings pour in---but not for long, and soon rating numbers decrease. Average ratings step upward, then steadily decrease with age, until years later when movies experience an apparent critical resurgence.
+The ratings of movies are correlated with their release years. After a movie receives its first rating, other ratings pour in---but not for long, and soon rating numbers decrease. Average ratings step upward, then steadily decrease with age, until years later when movies experience an apparent critical resurgence.  
 
-Finally, genres matter for movie ratings overall. More movies from certain genres---drama, for example---were reviewed in our dataset. Based on average rating, users preferred some genres over others. These genre effects seem to vary on a user-to-user basis.
+Finally, genres matter for movie ratings overall. More movies from certain genres---drama, for example---were reviewed in our dataset. Based on average rating, users preferred some genres over others. These genre effects seem to vary on a user-to-user basis.  
 
 # 2.2 Modeling approach
 
-Values of the key dependent variable, ratings, in edx are discrete. In other words ratings values are measured by counting. One adjustment the model will make is to allow for ratings predictions that are discrete, in order to produce a more sensitive measure.
+My approach to developing the model is to begin with a naive attempt using a simple average. From there, I will tune my model, adding predictors incrementally in an effort to minimize RMSE. I plan to use predictors based on the insights detailed above, to ultimately produce a model that accounts for movie, user, time, and genre effects on ratings.
 
+Values of the key dependent variable, ratings, in edx are discrete. In other words ratings values are measured by counting. One improvement in my model is that it will allow for ratings predictions that are discrete. The result should be a more sensitive measure and, by extension, a lower RMSE.
 
 # 3.0 Results
 
+In this section I develop my model to minimize the RMSE of predicted movie ratings and actual ratings in the edx dataset, then present the results of my model. As previously described, I adopt an iterative approach, adding predictors to the model one-by-one.  
+
 # 3.1 Model results
+
+The most straightforward model for a movie recommendation system would simply predict the same rating for each movie, not taking into account unique characteristics of the movie, the user rating it, or the time in which the rating was submitted. Such a model would use the average to minimize the RMSE. With the edx data, a model using only a simple average of movie ratings results in a RMSE of 1.06, as shown in table 3.1.  
+
+```{r naive model, message=FALSE, warning=FALSE, echo=FALSE}
+# Compute RMSE using the average of all ratings
+rmses <- data_frame(method = "Only estimate is the average",
+                    RMSE = RMSE(mean(edx$rating), edx$rating))
+# Create the RMSE table
+rmses %>%
+  knitr::kable(caption = "Table 3.1. RMSE by method I",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+```
+
+The RMSE of 1.06 is quite high---it would translate to regularly missing ratings predictions by more than a full point. We can refer back to table 2.1 to confirm that our current model RMSE is equal to the standard deviation of movie ratings in edx. A reasonable goal is to improve upon this RMSE. In an effort to do so, we can tweak the model so that instead of using a simple average as the estimate, we use a movie--average, *i.e.*, the average rating per movie. This will help disentangle the movie-specific effects we observed in the data (some movies are "better" than others). Table 3.2 adds a new row to report the RMSE for our movie--average model.  
+
+```{r movie average model, message=FALSE, warning=FALSE, echo=FALSE}
+# Add movie--average to edx
+movie_sum <- edx %>% group_by(movieId) %>%
+  summarize(mu_movie = mean(rating))
+
+edx <- left_join(edx, movie_sum, by = "movieId")
+# Append the row to the RMSE table
+rmses <- bind_rows(rmses,
+                   data_frame(method = "Add movie–average effect",
+                    RMSE = RMSE(edx$mu_movie, edx$rating)))
+# Display the RMSE table
+rmses %>%
+  knitr::kable(caption = "Table 3.2. RMSE by method II",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+```
+
+We see that our updated model has improved RMSE, lowering it to 0.94. The next step is to account for user-specific effects. To compute the user-specific effect for a given movie, we subtract the movie--average rating from each user--movie rating (*i.e.*, row in edx). This provides a measure of how each user differed from the average rating for each movie. Table 3.3 adds another new row to show the results of the model incorporating an estimate for the user effect.  
+
+```{r user average model, message=FALSE, warning=FALSE, echo=FALSE}
+# Add user--average to edx
+b_u_sum <- edx %>% mutate(yhat = rating - mu_movie) %>%
+  group_by(userId) %>%
+  summarize(b_u = mean(yhat))
+
+edx <- left_join(edx, b_u_sum, by = "userId") %>%
+  mutate(mu_movie_user = mu_movie + b_u)
+# Append the row to the RMSE table
+rmses <- bind_rows(rmses,
+                   data_frame(method = "Add user–specific effect",
+                    RMSE = RMSE(edx$mu_movie_user, edx$rating)))
+# Display the RMSE table
+rmses %>%
+  knitr::kable(caption = "Table 3.3. RMSE by method III",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+```
+
+Incorporating an estimate for the effect of users improves our model performance once again. Now we need to address the variation of ratings over time in our data. We will add a time effect using the variable of weeks since a movie's first rating, the result of our data cleaning and exploratory data analysis. The resulting model RMSE is provided in table 3.4.  
+
+```{r time model, message=FALSE, warning=FALSE, echo=FALSE}
+# Add time effect to edx
+b_t_sum <- edx %>% mutate(error = rating - mu_movie_user) %>%
+  group_by(aging_time) %>%
+  summarize(b_t = mean(error))
+
+edx <- left_join(edx, b_t_sum, by = "aging_time") 
+
+# Convert NAs to 0
+edx$b_t[is.na(edx$b_t)] <- 0
+
+edx <- edx %>%
+  mutate(mu_movie_user_time = mu_movie_user + b_t)
+
+# Append the row to the RMSE table
+rmses <- bind_rows(rmses,
+                   data_frame(method = "Add time effect",
+                    RMSE = RMSE(edx$mu_movie_user_time, edx$rating)))
+# Display the RMSE table
+rmses %>%
+  knitr::kable(caption = "Table 3.4. RMSE by method IV",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+```
+
+The measure of weeks since first rating represents an improvement to the model, decreasing RMSE from 0.8567 to 0.8562. The logical final step to round out the model is adding a treatment for genres. The result of incorporating genre effects into the model is depicted in Table 3.5.  
+
+```{r genre model, message=FALSE, warning=FALSE, echo=FALSE}
+# Add genre effect to edx
+b_g_sum <- edx %>% mutate(error = rating - mu_movie_user_time) %>%
+  group_by(genres) %>%
+  summarize(b_g = mean(error))
+
+edx <- left_join(edx, b_g_sum, by = "genres") 
+
+edx <- edx %>%
+  mutate(mu_movie_user_time_genres = mu_movie_user_time + b_g)
+
+# Append the row to the RMSE table
+rmses <- bind_rows(rmses,
+                   data_frame(method = "Add genre effect",
+                    RMSE = RMSE(edx$mu_movie_user_time_genres, edx$rating)))
+# Display the RMSE table
+rmses %>%
+  knitr::kable(caption = "Table 3.5. RMSE by method V",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+```
+
+With all variables included, our model results in an RMSE of 0.8559 on the edx ratings data. The culmination of the project is to evaluate the model's performance on the final hold-out test set.  
 
 # 3.2 Model performance
 
+The first step of evaluating the final model on the validation dataset is to repeat our data cleaning procedure in order to get the measure of weeks since a movie's first rating. Then, we will append columns for the four final model effects---movie, user, time, and genre. Finally, we will calculate RMSE, measuring success by whether the value is below 0.8649.  
+
+Before performing the final evaluation, we need to address not applicable (NA) values in the time variable predictor appended to the validation set. Table 3.6 reveals that the user and genre effect columns do not contain NAs, but the column containing measures of time in weeks since a movie's first rating does. To deal with these, I convert each NA to the average value of the time effect in the validation set.  
+
+```{r final model preparation, message=FALSE, warning=FALSE, echo=FALSE}
+# Update validation with timestamp converted to date format
+validation <- validation %>% 
+  mutate(rating_time = as.Date(as.POSIXct(timestamp, origin = "1970-01-01 00:00:00",tz = "GMT"))) %>% 
+  mutate(rating_year = year(rating_time)) %>%
+  select(-timestamp)
+
+# Calculate the aging time
+validation <- validation %>% left_join(first_sum, by = "movieId")
+validation <- validation %>%
+  mutate(aging_time = as.numeric(round((rating_time - first_rating_time)/7,0)))
+
+# Append effects to validation
+validation <- validation %>% left_join(b_u_sum, by = "userId") %>%
+  left_join(b_t_sum, by = "aging_time") %>%
+  left_join(b_g_sum, by = "genres")%>%
+  left_join(movie_sum, by = "movieId")
+
+# Check for NAs in validation set
+knitr::kable(data.frame(NAs = colSums(is.na(validation[,12:14]))),
+       caption = "Table 3.6. Check for NA values in validation set") %>% 
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+```
+
+With the NA values converted, we can evaluate the final model. Results are shown in table 3.7.  
+
+```{r final model evaluation, message=FALSE, warning=FALSE, echo=FALSE}
+# Convert NAs to mean of b_t in validation
+validation$b_t[is.na(validation$b_t)] <- mean(validation$b_t, na.rm = T)
+
+# Combine effects for final predicted ratings
+validation <- validation %>%
+  mutate(predicted_rating = mu_movie + b_u + b_t + b_g)
+
+# Create and display the final RMSE table
+data_frame(method = "Movie, user, time, genre effect model",
+                    RMSE = RMSE(validation$rating, validation$predicted_rating)) %>%
+  knitr::kable(caption = "Table 3.7. Final RMSE evaluation",
+               row.names = FALSE,
+               digits = 4) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = "HOLD_position")
+```
+
+My model's final RMSE is 0.8645. The effects included in the model allow us to make predictions that are generally within the target of 0.8649, meaning we can generally make predictions of movie ratings that are suitably close to the genuine values observed in the data.
+
 # 4.0 Conclusion
+
+This project involved making predictions on movie ratings using machine learning techniques. The contribution of this work is demonstrating how simple methods can result in strong predictive power on variables in large datasets. This is useful for individuals seeking entertainment---movies, for example. But there are many other potential practical applications for the techniques used in this analysis. I will discuss those after summarizing the report and addressing the limitations of this work.  
 
 # 4.1 Report summary
 
+With the aim of developing an accurate movie recommendation model, I performed analysis on a large dataset. The data were millions of movie ratings with corresponding information on users, time, and genre. My efforts involved summarizing the data, cleaning the data, performing exploratory analysis and data visualization. The result was added insight which, in turn, I put to use while considering strategies for modeling movie ratings. I developed my model, electing for an iterative process to drive RMSE lower in increments. Adding in effects by movie, user, time, and genre allowed my model to account for the rich variability observed across all. Ultimately, I was able to achieve the goal of an appropriately low RMSE when evaluating my model's predictions compared to the ratings in the final hold-out test set.  
+
 # 4.2 Limitations
 
+My project, while successful, is not without drawbacks. Movies with low rating counts confound predictions that use average rating as a benchmark, such as mine. A similar case can be made for users with low rating counts. Aside from that, my analysis uncovered some odd patterns in the data---for example, average movie ratings increasing substantially once roughly 600 weeks have passed since the first rating. This is an example of a phenomenon that is difficult to explain, and perhaps inadequately addressed in my analysis. Another possible limitation of this work involves the handling of NA values in the validation set. I opted to convert those to the column average for simplicity---it was straightforward. But it is possible that closer investigation would uncover a better way to deal with the NAs.  
+
 # 4.3 Future work
+
+Future analysis would benefit from improved data. More granular genre categories could be one improvement, as there are likely more than 19 unique genres that are informative with respect to movies. Other improvements to the dataset could come by incentivizing users to rate more movies; the large number of users who rated comparatively few movies could be providing much more predictive power. Finally, it is likely that new or more advanced modeling techniques could push the RMSE down further. I met the target goal, but there is likely room for improvement in future studies.
