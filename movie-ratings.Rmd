@@ -36,6 +36,8 @@ if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.
 if(!require(kableExtra)) install.packages("kableExtra", repos = "http://cran.us.r-project.org")
 if(!require(psych)) install.packages("psych", repos = "http://cran.us.r-project.org")
 if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
+if(!require(jtools)) install.packages("jtools", repos = "http://cran.us.r-project.org")
+if(!require(huxtable)) install.packages("huxtable", repos = "http://cran.us.r-project.org")
 
 library(tidyverse)
 library(caret)
@@ -43,6 +45,8 @@ library(data.table)
 library(kableExtra)
 library(psych)
 library(gridExtra)
+library(jtools)
+library(huxtable)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
@@ -249,7 +253,7 @@ dplyr::count(movieId) %>%
 A large number of movies with few ratings presents a challenge for prediction accuracy. This is further illustrated in figure 2.3, which plots movies' average ratings by number of ratings. There, we observe that movies with fewer ratings vary widely---they may be rated close to 0.5 on average, or close to 5.0. By contrast, variability narrows for movies with more ratings---they tend to be rated closer to 4.0, on average. The trendline in figure 2.3 also indicates that average rating increases as the number of ratings increases. These observations will prove useful in creating the prediction model.  
 
 \begin{center}
-Figure 2.3. Average ratings by number of ratings
+Figure 2.3. Average movie ratings by number of movie ratings
 \end{center}
 
 ```{r average ratings by number of ratings, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
@@ -305,7 +309,7 @@ plot2 <- rating_sum %>% mutate(rating = factor(rating)) %>%
 grid.arrange(plot1, plot2, ncol=2)
 ```
 
-The 69,878 unique users in the edx data represent another variable worth examining. Exploratory analysis reveals that, just as ratings varied by movie, ratings vary by user as well. User rating summary statistics are presented in table 2.5.
+The 69,878 unique users in the edx data represent another variable worth examining. Exploratory analysis reveals that, just as ratings varied by movie, ratings vary by user as well. User rating summary statistics are presented in table 2.5. The lowest number of ratings submitted by a single user is 10, and the highest is 6,616. The average user submitted nearly 129 ratings, but the large standard deviation of roughly 195 indicates substantial spread in ratings across individuals. The right-skewed distribution of ratings by user depicted in histogram form in figure 2.5 indicates many users submitted a low-to-moderate number of ratings, while a few users submitted very many.  
 
 ```{r summary of ratings by user, message=FALSE, warning=FALSE, echo=FALSE}
 # Summary table of ratings by user
@@ -336,9 +340,302 @@ dplyr::count(userId) %>%
   scale_x_log10()
 ```
 
+As with ratings per movie, variability in ratings per user complicates making accurate predictions. Figure 2.6 shows a scatterplot of average ratings by number of movies rated per user. The figure illustrates that less-active users vary greatly in their rating behavior, on average. Users with few total ratings may give movies nearly perfect scores on average, or conversely very low scores. This variability shrinks as ratings per user increase; more-active users appear to rate movies close to a 3.0 on average. A trendline reveals that average ratings decrease slightly as the number of user--ratings advances.  
+
+\begin{center}
+Figure 2.6. Average user ratings by number of user ratings
+\end{center}
+
+```{r average ratings by number of user ratings, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Create quick user summary table
+user_sum <- edx %>% group_by(userId) %>%
+  summarize(user_ratings = n(), 
+            user_mu = mean(rating),
+            user_sd = sd(rating))
+
+# Scatterplot of average and number of user ratings
+user_sum %>% 
+  ggplot(aes(user_ratings, user_mu)) +
+  geom_point(color = "steel blue", alpha = 0.3) +
+  geom_smooth() +
+  geom_vline(aes(xintercept = mean(user_sum$user_ratings)), color = "red") +
+  annotate("text", x = 400, y = 5,
+           label = round(mean(user_sum$user_ratings),0),
+           color = "red", size = 3) +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25)) +
+  labs(x = "Number of ratings per user",
+       y = "Average rating per user")
+```
+
+The distribution of average ratings by user differs from that of ratings overall. Figure 2.7 shows a modal value associated with lower ratings on the user--average (left hand) side. Another discrepancy is observed with 5.0 ratings---very few users average 5.0 for all movies they rated, yet the overall rating data contain many 5.0 ratings. These observations reinforce the expected conclusion that not all users---nor movies---are created equal.   
+
+\begin{center}
+Figure 2.7. User--average and overall ratings distributions
+\end{center}
+
+```{r user average and overall ratings distributions, fig.align = 'center', fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Plot average rating distribution alongside overall rating distribution
+plot3 <- user_sum %>% ggplot(aes(user_mu)) + 
+  geom_histogram(fill = "steel blue", color = "black",
+                 binwidth = 0.5) +
+  labs(title = "Distribution of user-average ratings",
+       x = "Rating",
+       y = "Count") + 
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25),
+        plot.title = element_text(hjust = 0.5, size = 10))
+
+plot4 <- rating_sum %>% mutate(rating = factor(rating)) %>%
+  ggplot(aes(rating, count)) +
+  geom_col(fill = "steel blue", color = "black") +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25),
+        plot.title = element_text(hjust = 0.5, size = 10)) + 
+  labs(title = "Distribution of movie ratings",
+       x = "Rating",
+       y = "Count")
+
+grid.arrange(plot3, plot4, ncol=2)
+```
+
+Do movie ratings in edx vary across release dates? Do rating patterns change in relation to the timing of submission? Exploratory analysis of the time trends in the data allows us to answer these questions. In figure 2.8, we see that ratings per year rise slowly at first, dating back to the early 1900s. Then yearly rating counts begin rising at an accelerated rate in the late 20th century, peaking in the mid 1990s. Since then, ratings per year decrease sharply.  
+
+\begin{center}
+Figure 2.8. Number of ratings by release year
+\end{center}
+
+```{r number of ratings by release year, fig.align = 'center', fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Plot the number of ratings by release year
+release_year_sum <- edx %>% group_by(release_year) %>%
+  summarize(n = n(), average_rating = mean(rating))
+
+ggplot(release_year_sum, aes(release_year, n)) +
+    geom_point(color = "steel blue", alpha = 0.6) +
+    geom_line(color = "steel blue") +
+    theme_classic() +
+    labs(x = "Year",
+         y = "Count") + 
+     theme(plot.background = element_rect(color = "black", fill=NA, size=0.25))
+```
+
+Movies released in the mid 1990s may receive the most ratings, but are they rated the highest? Figure 2.9 suggests not; from this plot of average ratings by release year, we note that movies from the 1940s and 1950s appear to garner the highest acclaim. After the mid-century period, ratings declined consistently.  
+
+\begin{center}
+Figure 2.9. Average rating by release year
+\end{center}
+
+```{r average rating by release year, fig.align = 'center', fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Plot the average rating by release year
+ggplot(release_year_sum, aes(release_year, average_rating)) +
+    geom_point(color = "steel blue", alpha = 0.6) +
+    geom_smooth() +
+    theme_classic() +
+    labs(x = "Year",
+         y = "Rating") + 
+     theme(plot.background = element_rect(color = "black", fill=NA, size=0.25))
+```
+
+A simple linear regression model provides more information on the relationship between release year and average rating. Two models are estimated and results reported in table 2.6. Model 1 estimates the effect of the release year and squared release year on average rating; the squared term is included to account for the curved shape of average ratings by release year illustrated in figure 2.9. In model 2, a cubic term is added for comparison because the curve of average ratings by release year appears to have a point of inflection. The significant coefficients in both models indicate that release year impacts average rating, and that the impact varies over time.  
+
+\begin{center}
+Table 2.6. Linear models of average rating by movie release year
+\end{center}
+
+```{r basic linear model results, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# Fit model with squared term
+fit_lm1 <- lm(average_rating ~ I(release_year^2) +
+               I(release_year), 
+             data = release_year_sum)
+# Fit model with squared and cubic terms
+fit_lm2 <- lm(average_rating ~ I(release_year^3) + I(release_year^2) +
+               I(release_year), 
+             data = release_year_sum)
+# Create table of results for both models
+export_summs(fit_lm1, fit_lm2)
+```
+
+In order to better utilize the time component of movie ratings, I add a new variable to the edx dataset to measure the time since a movie was first rated. This variable is computed as a simple subtraction of the earliest rating from a given user--movie rating. For ease of interpretation, I convert the resulting count of days into weeks via dividing by 7. Figure 2.10 shows the number of ratings since the first rating by week. Not surprisingly, rating numbers per movie peak near the time of that movie's first rating, then tend to taper off as time passes. This suggests initial excitement builds around a movie, which then abates as the movie ages and new films assume the spotlight.  
+
+\begin{center}
+Figure 2.10. Count of ratings, by week since first rating
+\end{center}
+
+```{r ratings since first rating by week, fig.align = 'center', fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Calculate the first rating time of each movie
+first_sum <- edx %>% group_by(movieId) %>%
+  summarize(first_ratings = n(),
+            first_mu = mean(rating),
+            first_rating_time = min(rating_time))
+
+# Calculate the aging time
+edx <- edx %>% left_join(first_sum, by = "movieId")
+edx <- edx %>%
+  mutate(aging_time = as.numeric(round((rating_time - first_rating_time)/7,0)))
+
+# Create a summary table grouping by aging time
+aging_time_sum <- edx %>% group_by(aging_time) %>%
+  summarize(n_aging_time = n(),
+            average_rating = mean(rating))
+# Plot ratings count by time since first rating
+ggplot(aging_time_sum, aes(aging_time, n_aging_time)) +
+    geom_point(color = "steel blue", alpha = 0.6) +
+    geom_line(color = "steel blue") +
+    theme_classic() +
+    labs(x = "Weeks since first rating",
+         y = "Count") + 
+     theme(plot.background = element_rect(color = "black", fill=NA, size=0.25))
+```
+
+Figure 2.11 plots average ratings by time in weeks since a movie's first rating was submitted. The firgure shows that after an initial ratings bump (presumably during a period of buzz surrounding a newly released film), viewers tend to cool on movies and ratings decline slowly. As movies age since their first rating, average ratings step upward, perhaps due to nostalgia around the 3-year mark after release. Following that upward jump is another slow and steady average ratings decline. Years after the initial rating, average ratings increase substantially, but numbers of ratings are small; one could speculate that the cause is a subset of users who watch old films reverently.  
+
+\begin{center}
+Figure 2.11. Average rating, by week since first rating
+\end{center}
+
+```{r average rating by week since first rating, fig.align = 'center', fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+
+# Plot average rating by time since first rating
+ggplot(aging_time_sum, aes(aging_time, average_rating)) +
+    geom_point(color = "steel blue", alpha = 0.6) +
+    geom_line(color = "steel blue") +
+    theme_classic() +
+    labs(x = "Weeks since first rating",
+         y = "Average rating") + 
+     theme(plot.background = element_rect(color = "black", fill=NA, size=0.25))
+```
+
+Movies in the edx data are categorized into various genres. The distinct genres included in the dataset are listed in table 2.7. There are 19 unique genres (as well as the aforementioned "no genres listed" indicator). Notably, as demonstrated previously, a given movie can have more than one associated genre.    
+
+```{r edx unique genre list, message=FALSE, warning=FALSE, echo=FALSE}
+# Create vector of genres
+genres <- str_replace(edx$genres, "\\|.*","")
+# Drop duplicate genres from the vector
+genres <- genres[!duplicated(genres)]
+# Create a table listing the unique genres
+genres %>%
+  knitr::kable(caption = "Table 2.7. List of unique genres in edx",
+                                         col.names = "Genre",
+                                         row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+```
+
+Table 2.8 displays the results of aggregating the most commonly mentioned genres in the edx data, listing in addition the average rating associated with movies of those genres. The most common film category is drama, representing nearly 4 million user--film observations in the set. The table demonstrates that ratings vary across genres, with drama films rating above action films by 0.25, on average.  
+
+```{r edx most common genres, message=FALSE, warning=FALSE, echo=FALSE}
+# Calculate the number of movies per genre
+n_genres <- sapply(genres, function(g){
+  index <- str_which(edx$genres, g)
+    length(edx$rating[index])
+    
+})
+
+# Calculate the average rating by genre
+genres_rating <- sapply(genres, function(g){
+  index <- str_which(edx$genres, g) 
+  mean(edx$rating[index], na.rm = T)
+})
+
+# Create summary table by genres
+genres_sum <- data.frame(Genre = genres, 
+                         Movies = n_genres,
+                         "Average rating" = genres_rating,
+                         check.names = FALSE)
+
+# Display summary table by genres
+genres_sum %>% arrange(desc(Movies)) %>% slice(1:5) %>%
+  knitr::kable(caption = "Table 2.8. Most common genres in edx",
+                                         digits = 2,
+                                         row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+```
+
+Film noir movies are the highest rated on average among the edx genres. Figure 2.12 shows they rate close to 4.0 on average. Conversely, the lowest rated films on average belong to the horror genre. The figure provides further evidence that ratings vary by genre.  
+
+\begin{center}
+Figure 2.12. Average rating by genre
+\end{center}
+
+```{r average rating by genre, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+
+# Plot average rating by genre
+colnames(genres_sum)[3] <- "average_rating"
+genres_sum %>%
+  ggplot(
+     aes(x = reorder(Genre, average_rating), average_rating)) +
+     geom_col(fill = "steel blue", color = "black") +
+     theme_classic() +
+     coord_flip() +
+     labs(
+     y = "Average rating",
+     x = "Genres") + 
+     theme(plot.background = element_rect(color = "black", fill=NA, size=0.25))
+```
+
+Do genre effects interact with user effects? To investigate, we can take a random sample of 10 users from edx and explore how they rate movies on average across genres. In figure 2.13 we see the average ratings by genre for our random sample. The average ratings and the ranking of genres differs in figure 2.13 compared to figure 2.12. This suggests that, although there may be overall favorite genres for movie watchers, certain users have distinct genre preferences. These genre preferences will help inform our final model.  
+
+\begin{center}
+Figure 2.13. Average rating by genre, random sample of users
+\end{center}
+
+```{r average rating by genre for a random sample, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+
+# Create list of users close to the average
+user_list <- user_sum %>% 
+  filter(user_ratings >= round(mean(user_ratings),2)-1,
+         user_ratings <= round(mean(user_ratings),2)+1) %>% 
+  select(userId, user_mu)
+
+# Sample 10 users at random
+set.seed(1, sample.kind = "Rounding")
+user_list <- sample(user_list$userId, 10)
+
+# Create average rating figure by genre for the 10 random users
+edx_random <- edx %>%
+  filter(userId %in% user_list)
+
+# Calculate the number of movies per genre
+n_genres2 <- sapply(genres, function(g){
+  index <- str_which(edx_random$genres, g)
+    length(edx_random$rating[index])
+    
+})
+
+# Calculate the average rating by genre
+genres_rating2 <- sapply(genres, function(g){
+  index <- str_which(edx_random$genres, g) 
+  mean(edx_random$rating[index], na.rm = T)
+})
+
+# Create summary table by genres
+genres_sum2 <- data.frame(Genre = genres, 
+                         Movies = n_genres2,
+                         average_rating = genres_rating2)
+# Plot average rating by genre for random sample of 10 users
+genres_sum2 %>%
+  ggplot(
+     aes(x = reorder(Genre, average_rating), average_rating)) +
+     geom_col(fill = "steel blue", color = "black") +
+     theme_classic() +
+     coord_flip() +
+     labs(
+     y = "Average rating",
+     x = "Genres") + 
+     theme(plot.background = element_rect(color = "black", fill=NA, size=0.25))
+
+```
+
 ## 2.1.3 Insights gained
 
-The exercise of data exploration and visualization resulted in several useful insights. Ratings data are unbalanced---a large number of movies have very few ratings. As the number of times a movie has been rated rises, average ratings increase and rating variability declines. Despite users submitting a large number of overall 5.0 ratings, very few movies averaged a rating of 4.5 or higher.
+The exercise of data exploration and visualization resulted in several useful insights. Ratings data are unbalanced---a large number of movies have very few ratings. As the number of times a movie has been rated rises, average ratings increase and rating variability declines. Despite users submitting a large number of overall 5.0 ratings, very few movies averaged a rating of 4.5 or higher.  
+
+Substantial user-to-user variation is present in the edx data. Certain users rate very few movies, while others submitted thousands of ratings. User rating averages varied widely among those with few ratings. This variability was not observed for users with many ratings. In addition, very high and very low user--rating averages were rare, especially in light of how many 5.0 ratings were submitted overall.
+
+The ratings of movies are correlated with their release years. After a movie receives its first rating, other ratings pour in---but not for long, and soon rating numbers decrease. Average ratings step upward, then steadily decrease with age, until years later when movies experience an apparent critical resurgence.
+
+Finally, genres matter for movie ratings overall. More movies from certain genres---drama, for example---were reviewed in our dataset. Based on average rating, users preferred some genres over others. These genre effects seem to vary on a user-to-user basis.
 
 # 2.2 Modeling approach
 

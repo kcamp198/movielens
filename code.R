@@ -163,3 +163,97 @@ edx %>%
                row.names = FALSE) %>%
   kable_styling(font_size = 10, position = "center",
                 latex_options = c("HOLD_position"))
+
+release_year_sum <- edx %>% group_by(release_year) %>%
+  summarize(n = n(), average_rating = mean(rating))
+
+fit_lm1 <- lm(average_rating ~ I(release_year^2) +
+               I(release_year), 
+             data = release_year_sum)
+
+fit_lm2 <- lm(average_rating ~ I(release_year^3) + I(release_year^2) +
+               I(release_year), 
+             data = release_year_sum)
+
+
+install.packages("jtools")
+library(jtools)
+install.packages("huxtable")
+library(huxtable)
+export_summs(fit_lm1, fit_lm2, scale = TRUE)
+
+# Calculate the first rating time of each movie
+first_sum <- edx %>% group_by(movieId) %>%
+  summarize(first_ratings = n(),
+            first_mu = mean(rating),
+            first_rating_time = min(rating_time))
+
+# Calculate the aging time
+edx <- edx %>% left_join(first_sum, by = "movieId")
+edx <- edx %>%
+  mutate(aging_time = as.numeric(round((rating_time - first_rating_time)/7,0)))
+head(edx)
+max(edx$aging_time)
+
+genres <- str_replace(edx$genres, "\\|.*","")
+genres <- genres[!duplicated(genres)]
+genres %>%
+  knitr::kable(caption = "Table 2.7. List of unique genres in edx",
+               col.names = "Genre",
+               row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+
+
+
+n_genres <- sapply(genres, function(g){
+  index <- str_which(edx$genres, g)
+  length(edx$rating[index])
+  
+})
+
+# Calculate the average rating by genre
+genres_rating <- sapply(genres, function(g){
+  index <- str_which(edx$genres, g) 
+  mean(edx$rating[index], na.rm = T)
+})
+
+# Create summary table by genres
+genres_sum <- data.frame(Genre = genres, 
+                         Movies = n_genres,
+                         "Average rating" = genres_rating,
+                         check.names = FALSE)
+
+# Display summary table by genres
+genres_sum %>% arrange(desc(Movies)) %>% slice(1:5) %>%
+  knitr::kable(caption = "Table 2.8. Most common genres in edx",
+               digits = 2,
+               row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+
+# Plot average rating by genre
+colnames(genres_sum)[3] <- "average_rating"
+genres_sum %>%
+  ggplot(
+    aes(x = reorder(Genre, average_rating), average_rating)) +
+  geom_col(fill = "steel blue", color = "black") +
+  theme_classic() +
+  coord_flip() +
+  labs(
+    y = "Average rating",
+    x = "Genres") + 
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25))
+
+genres_sum
+
+head(edx)
+
+movie_sum <- edx %>% group_by(movieId) %>%
+  summarize(mu_movie = mean(rating))
+
+movie_sum
+edx <- left_join(edx, movie_sum, by = "movieId")
+head(edx)
+
+RMSE(edx$mu_movie, edx$rating)
