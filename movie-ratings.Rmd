@@ -260,6 +260,8 @@ dplyr::count(movieId) %>%
 
 A large number of movies with few ratings presents a challenge for prediction accuracy. This is further illustrated in figure 2.3, which plots movies' average ratings by number of ratings. There, we observe that movies with fewer ratings vary widely---they may be rated close to 0.5 on average, or close to 5.0. By contrast, variability narrows for movies with more ratings---they tend to be rated closer to 4.0, on average. The trendline in figure 2.3 also indicates that average rating increases as the number of ratings increases. These observations will prove useful in creating the prediction model.  
 
+\newpage
+
 \begin{center}
 Figure 2.3. Average movie ratings by number of movie ratings
 \end{center}
@@ -336,7 +338,7 @@ edx %>%
 Figure 2.5. Distribution of ratings per user
 \end{center}
 
-```{r distribution of ratings per user, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+```{r distribution of ratings per user, fig.align = 'center', fig.width = 4, fig.height = 2.5, message=FALSE, warning=FALSE, echo=FALSE}
 ## Visualize the distribution of ratings per user
 edx %>%
 dplyr::count(userId) %>% 
@@ -354,7 +356,7 @@ As with ratings per movie, variability in ratings per user complicates making ac
 Figure 2.6. Average user ratings by number of user ratings
 \end{center}
 
-```{r average ratings by number of user ratings, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+```{r average ratings by number of user ratings, fig.align = 'center', fig.width = 4, fig.height = 2.5, message=FALSE, warning=FALSE, echo=FALSE}
 ## Create quick user summary table for scatterplot of average and number of user-ratings
 user_sum <- edx %>% group_by(userId) %>%
   summarize(user_ratings = n(), 
@@ -446,6 +448,8 @@ ggplot(release_year_sum, aes(release_year, average_rating)) +
 ```
 
 A simple linear regression model provides more information on the relationship between release year and average rating. Two models are estimated and results reported in table 2.6. Model 1 estimates the effect of the release year and squared release year on average rating; the squared term is included to account for the curved shape of average ratings by release year illustrated in figure 2.9. In model 2, a cubic term is added for comparison because the curve of average ratings by release year appears to have a point of inflection. The significant coefficients in both models indicate that release year impacts average rating, and that the impact varies over time.  
+
+\newpage
 
 \begin{center}
 Table 2.6. Linear models of average rating by movie release year
@@ -567,6 +571,8 @@ genres_sum %>% arrange(desc(Movies)) %>% slice(1:5) %>%
 ```
 
 Film noir movies are the highest rated on average among the edx genres. Figure 2.12 shows they rate close to 4.0 on average. Conversely, the lowest rated films on average belong to the horror genre. The figure provides further evidence that ratings vary by genre.  
+
+\newpage
 
 \begin{center}
 Figure 2.12. Average rating by genre
