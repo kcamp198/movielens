@@ -49,6 +49,23 @@ dplyr::count(movieId) %>%
   scale_x_log10() + 
   ggtitle("Movies")
 
+edx %>%
+  dplyr::count(movieId) %>%
+  describe(fast = TRUE) %>%
+  select(-vars) %>%
+  slice(2) %>%
+  knitr::kable(caption = "Table 2.4. Summary statistics for ratings",
+                                         row.names = FALSE)
+
+edx %>%
+  dplyr::count(movieId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(fill = "steel blue", color = "white") +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25)) + 
+  labs(x = "Number of ratings", y = "Count of unique movies") + 
+  scale_x_log10()
+
 # Visualize that different users rate different numbers of movies
 edx %>%
   dplyr::count(userId) %>% 
@@ -118,6 +135,8 @@ install.packages("psych")
 library(psych)
 describe(edx$rating, fast = TRUE) %>% knitr::kable()
 
+describe(edx$rating, fast = TRUE) %>% select(-vars)
+
 #create a summary table grouping by rating
 rating_sum <- edx %>% group_by(rating) %>%
   summarize(count = n())
@@ -133,3 +152,14 @@ rating_sum %>% mutate(rating = factor(rating)) %>%
   labs(x = "Rating", y = "Count",
        title = "Number of rating",
        caption = "Figure 1 - Rating in edx dataset")
+
+
+edx %>%
+  dplyr::count(userId) %>%
+  describe(fast = TRUE) %>%
+  select(-vars) %>%
+  slice(2) %>%
+  knitr::kable(caption = "Table 2.5. Summary statistics for users",
+               row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))

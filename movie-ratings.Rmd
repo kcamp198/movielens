@@ -1,5 +1,5 @@
 ---
-title: "Report on Movie Ratings"
+title: "Developing and Evaluating a Movie Rating Prediction Model"
 author: "Kevin Camp"
 date: '`r Sys.Date()`'
 output: pdf_document
@@ -34,11 +34,15 @@ if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-
 if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
 if(!require(data.table)) install.packages("data.table", repos = "http://cran.us.r-project.org")
 if(!require(kableExtra)) install.packages("kableExtra", repos = "http://cran.us.r-project.org")
+if(!require(psych)) install.packages("psych", repos = "http://cran.us.r-project.org")
+if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
 
 library(tidyverse)
 library(caret)
 library(data.table)
 library(kableExtra)
+library(psych)
+library(gridExtra)
 
 # MovieLens 10M dataset:
 # https://grouplens.org/datasets/movielens/10m/
@@ -84,10 +88,10 @@ edx_summary[,1:6] %>%
                 latex_options = c("HOLD_position"))
 ```
 
-Note the result from multiplying the unique users and unique movies values from table 1.2, 69,878 × 10,677 =  746,087,406, a number larger than the total row count for the edx set (9,000,055). This implies that in the edx data, each user did not rate each movie. It is then useful to view the edx dataset as a matrix, with users represented by rows and movies represented by columns. Chart 1.1 takes a random sample of 100 movies and 100 users and depicts user--movie combinations for which ratings exist with yellow shading. The machine learning algorithm developed in this project will allow us to use values in the entire matrix as predictors for each empty cell.  
+Note the result from multiplying the unique users and unique movies values from table 1.2, 69,878 × 10,677 =  746,087,406, a number larger than the total row count for the edx set (9,000,055). This implies that in the edx data, each user did not rate each movie. It is then useful to view the edx dataset as a matrix, with users represented by rows and movies represented by columns. Figure 1.1 takes a random sample of 100 movies and 100 users and depicts user--movie combinations for which ratings exist with yellow shading. The machine learning algorithm developed in this project will allow us to use values in the entire matrix as predictors for each empty cell.  
 
 \begin{center}
-Chart 1.1. Matrix of a random sample of 100 users and 100 movies from edx
+Figure 1.1. Matrix of a random sample of 100 users and 100 movies from edx
 \end{center}
 
 ```{r matrix sparsity, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
@@ -132,19 +136,23 @@ edx %>%
 
 For this project, my goal is to develop a movie recommendation model. This model will aim to accurately predict movie ratings in the final hold-out test set as if they were not known to me. The means of evaluating my success will be minimizing residual mean squared error (RMSE). This project has a defined target RMSE value of less than 0.8649. As such, my goal is to design a model using machine learning methods that achieves RMSE < 0.8649.  
 
-The key variable of interest for recommending movies to users is the rating. The rating measures how much a user enjoyed a given movie. In the edx data, ratings range from a minimum of 0.5 to a maximum of 5.0. The overall mean value for the collection of user--movie ratings in the dataset is 3.51, and the standard deviation is 1.06. Table 2.1 displays these summary statistics.  
+The key dependent variable of interest for recommending movies to users is the rating. The rating measures how much a user enjoyed a given movie. In the edx data, ratings range from a minimum of 0.5 to a maximum of 5.0. The overall mean value for the collection of user--movie ratings in the dataset is 3.51, and the standard deviation is 1.06. Table 2.1 displays these summary statistics.  
 
-```{r ratings summary statistics, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
+```{r ratings summary statistics, message=FALSE, warning=FALSE, echo=FALSE}
 #summary table of ratings
-install.packages("psych")
-library(psych)
-describe(edx$rating, fast = TRUE) %>% knitr::kable(caption = "Table 2.1. Summary statistics for ratings",
+describe(edx$rating, fast = TRUE) %>%
+  select(-vars) %>%
+  knitr::kable(caption = "Table 2.1. Summary statistics for ratings",
                                      row.names = FALSE) %>%
   kable_styling(font_size = 10, position = "center",
                 latex_options = c("HOLD_position"))
 ```
 
 Further exploring the data reveals additional patterns in user ratings. As shown in figure 2.1, we see that the most common rating is 4.0, and that whole integer values are more common in the data than values ending in a half star.  
+
+\begin{center}
+Figure 2.1. Count by rating in edx
+\end{center}
 
 ```{r ratings summed, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
 #create a table with the sum of each user rating
@@ -153,10 +161,9 @@ rating_sum <- edx %>% group_by(rating) %>%
 
 rating_sum %>% mutate(rating = factor(rating)) %>%
   ggplot(aes(rating, count)) +
-  ggtitle("Figure 2.1. Count by rating in edx") +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  geom_col(fill = "steel blue", color = "white") +
-  theme_classic() + 
+  geom_col(fill = "steel blue", color = "black") +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25)) + 
   labs(x = "Rating", y = "Count")
 ```
 
@@ -173,7 +180,7 @@ My techniques and processes will include the following:
 
 ## 2.1.1 Data cleaning
 
-The timestamp in edx represents seconds since midnight Coordinated Universal Time (UTC) of January 1, 1970. My first data cleaning effort was converting this variable to a date, which is easier to interpret and analyze. Table 2.1 displays the first five rows of the updated edx set with timestamp converted to a date format in the "rating_time" column and an added column, "rating_year" listing only the year of each movie--user rating.  
+The timestamp in edx represents seconds since midnight Coordinated Universal Time (UTC) of January 1, 1970. My first data cleaning effort was converting this variable to a date, which is easier to interpret and analyze. Table 2.2 displays the first five rows of the updated edx set with timestamp converted to a date format in the "rating_time" column and an added column, "rating_year" listing only the year of each movie--user rating.  
 
 ```{r view updated edx top, message=FALSE, warning=FALSE, echo=FALSE}
 
@@ -184,13 +191,13 @@ edx <- edx %>%
   select(-timestamp)
 
 #view first five rows
-edx %>% slice(1:5) %>% knitr::kable(caption = "Table 2.1. First five rows of updated edx dataset",
+edx %>% slice(1:5) %>% knitr::kable(caption = "Table 2.2. First five rows of updated edx dataset",
                                      row.names = FALSE) %>%
   kable_styling(font_size = 10, position = "center",
                 latex_options = c("scale_down","HOLD_position"))
 ```
 
-Movie release years are included in edx, but they are attached to the end of the text of cells in the title column. This information is more useful as a standalone column. As a result, my second data cleaning effort is to separate the movie release dates into a new "release_year" column, displayed in table 2.2.  
+Movie release years are included in edx, but they are attached to the end of the text of cells in the title column. This information is more useful as a standalone column. As a result, my second data cleaning effort is to separate the movie release dates into a new "release_year" column, displayed in table 2.3.  
 
 ```{r view final edx top, message=FALSE, warning=FALSE, echo=FALSE}
 
@@ -200,7 +207,7 @@ edx <- edx %>%
                                           str_length(title) - 1)))
 
 #view first five rows
-edx %>% slice(1:5) %>% knitr::kable(caption = "Table 2.2. First five rows of edx dataset with release year",
+edx %>% slice(1:5) %>% knitr::kable(caption = "Table 2.3. First five rows of edx dataset with release year",
                                      row.names = FALSE) %>%
   kable_styling(font_size = 10, position = "center",
                 latex_options = c("scale_down","HOLD_position"))
@@ -208,12 +215,134 @@ edx %>% slice(1:5) %>% knitr::kable(caption = "Table 2.2. First five rows of edx
 
 ## 2.1.2 Data exploration and visualization
 
+As demonstrated in table 1.2, the edx set contains 10,677 unique movies. Exploring these data, we find some of the movies receive more ratings than others. Summary statistics on ratings per movie are shown in table 2.4. Rating counts per movie range from 1 to 31362. Though the average ratings per movie is substantially high at nearly 843, this belies a notably large distribution; viewing this distribution of ratings per movie in histogram form in figure 2.2, we observe more than 100 movies in edx only received 1 rating, while a number of movies received more than 10,000 ratings.   
 
+```{r summary of ratings by movie, message=FALSE, warning=FALSE, echo=FALSE}
+# Summary table of ratings by movie
+edx %>%
+  dplyr::count(movieId) %>%
+  describe(fast = TRUE) %>%
+  select(-vars) %>%
+  slice(2) %>%
+  knitr::kable(caption = "Table 2.4. Summary statistics for ratings",
+                                         row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+```
+
+\begin{center}
+Figure 2.2. Distribution of ratings per movie
+\end{center}
+
+```{r distribution of ratings per movie, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Visualize the distribution of ratings per movie
+edx %>%
+dplyr::count(movieId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(fill = "steel blue", color = "black") +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25)) + 
+  labs(x = "Number of ratings", y = "Count of unique movies") + 
+  scale_x_log10()
+```
+
+A large number of movies with few ratings presents a challenge for prediction accuracy. This is further illustrated in figure 2.3, which plots movies' average ratings by number of ratings. There, we observe that movies with fewer ratings vary widely---they may be rated close to 0.5 on average, or close to 5.0. By contrast, variability narrows for movies with more ratings---they tend to be rated closer to 4.0, on average. The trendline in figure 2.3 also indicates that average rating increases as the number of ratings increases. These observations will prove useful in creating the prediction model.  
+
+\begin{center}
+Figure 2.3. Average ratings by number of ratings
+\end{center}
+
+```{r average ratings by number of ratings, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Create quick summary table
+movie_sum <- edx %>% group_by(movieId) %>%
+  summarize(ratings = n(), 
+            mu = mean(rating),
+            sd = sd(rating))
+
+# Scatterplot of average and number of ratings
+movie_sum %>% 
+  ggplot(aes(ratings, mu)) +
+  geom_point(color = "steel blue", alpha = 0.3) +
+  geom_smooth() +
+  geom_vline(aes(xintercept = mean(movie_sum$ratings)), color = "red") +
+  annotate("text", x = 2000, y = 5,
+           label = round(mean(movie_sum$ratings),0),
+           color = "red", size = 3) +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25)) +
+  labs(x = "Number of ratings per movie",
+       y = "Average rating per movie")
+```
+
+We can also investigate the distribution of average ratings by movie and compare it to the overall distribution of ratings. As we see in figure 2.4, the relative proportion of 5.0 ratings (seen in the right hand chart) greatly exceeds the number of movies that average a rating of 5.0 (seen in the left hand chart). This suggests user-to-user variability in rating behavior---for example, a given user could be especially inclined to give 5.0 ratings simply because they consider themselves a "positive person." On average however, this hypothetical effect would be abated.   
+
+\begin{center}
+Figure 2.4. Average and overall ratings distributions
+\end{center}
+
+```{r average and overall ratings distributions, fig.align = 'center', fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Plot average rating distribution alongside overall rating distribution
+plot1 <- movie_sum %>% ggplot(aes(mu)) + 
+  geom_histogram(fill = "steel blue", color = "black",
+                 binwidth = 0.5) +
+  labs(title = "Distribution of movie average ratings",
+       x = "Rating",
+       y = "Count") + 
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25),
+        plot.title = element_text(hjust = 0.5, size = 10))
+
+plot2 <- rating_sum %>% mutate(rating = factor(rating)) %>%
+  ggplot(aes(rating, count)) +
+  geom_col(fill = "steel blue", color = "black") +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25),
+        plot.title = element_text(hjust = 0.5, size = 10)) + 
+  labs(title = "Distribution of movie ratings",
+       x = "Rating",
+       y = "Count")
+
+grid.arrange(plot1, plot2, ncol=2)
+```
+
+The 69,878 unique users in the edx data represent another variable worth examining. Exploratory analysis reveals that, just as ratings varied by movie, ratings vary by user as well. User rating summary statistics are presented in table 2.5.
+
+```{r summary of ratings by user, message=FALSE, warning=FALSE, echo=FALSE}
+# Summary table of ratings by user
+edx %>%
+  dplyr::count(userId) %>%
+  describe(fast = TRUE) %>%
+  select(-vars) %>%
+  slice(2) %>%
+  knitr::kable(caption = "Table 2.5. Summary statistics for users",
+                                         row.names = FALSE) %>%
+  kable_styling(font_size = 10, position = "center",
+                latex_options = c("HOLD_position"))
+```
+
+\begin{center}
+Figure 2.5. Distribution of ratings per user
+\end{center}
+
+```{r distribution of ratings per user, fig.align = 'center', fig.width = 4, fig.height = 3, message=FALSE, warning=FALSE, echo=FALSE}
+# Visualize the distribution of ratings per user
+edx %>%
+dplyr::count(userId) %>% 
+  ggplot(aes(n)) + 
+  geom_histogram(fill = "steel blue", color = "black") +
+  theme_classic() +
+  theme(plot.background = element_rect(color = "black", fill=NA, size=0.25)) + 
+  labs(x = "Number of ratings", y = "Count of unique users") + 
+  scale_x_log10()
+```
 
 ## 2.1.3 Insights gained
 
+The exercise of data exploration and visualization resulted in several useful insights. Ratings data are unbalanced---a large number of movies have very few ratings. As the number of times a movie has been rated rises, average ratings increase and rating variability declines. Despite users submitting a large number of overall 5.0 ratings, very few movies averaged a rating of 4.5 or higher.
+
 # 2.2 Modeling approach
 
+Values of the key dependent variable, ratings, in edx are discrete. In other words ratings values are measured by counting. One adjustment the model will make is to allow for ratings predictions that are discrete, in order to produce a more sensitive measure.
 
 
 # 3.0 Results
